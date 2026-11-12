@@ -1,9 +1,9 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: hvo-demo
   labels:
     app: hvo-demo
+  name: hvo-demo
 spec:
   replicas: 1
   selector:
@@ -14,26 +14,27 @@ spec:
       labels:
         app: hvo-demo
     spec:
+      containers:
+      - image: zot.registry.svc.cluster.local:5000/hvo-demo/web@sha256:046ec845a335e548db81185610478876ceb944ce04894113c7e7bbd0756bfea0
+        name: web
+        ports:
+        - containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+        resources:
+          limits:
+            memory: 64Mi
+          requests:
+            cpu: 10m
+            memory: 16Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
       securityContext:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
-      containers:
-        - name: web
-          image: zot.registry.svc.cluster.local:5000/hvo-demo/web:initial
-          ports:
-            - containerPort: 8080
-          readinessProbe:
-            httpGet:
-              path: /healthz
-              port: 8080
-          resources:
-            requests:
-              cpu: 10m
-              memory: 16Mi
-            limits:
-              memory: 64Mi
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: [ALL]
