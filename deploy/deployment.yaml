@@ -1,3 +1,5 @@
+# Image is written by HVO (ApplicationWorkflow) as <registry>@<digest>;
+# everything else in this file is hand-maintained and must survive its commits.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
