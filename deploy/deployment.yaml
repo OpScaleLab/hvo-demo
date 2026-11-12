@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hvo-demo
+  labels:
+    app: hvo-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hvo-demo
+  template:
+    metadata:
+      labels:
+        app: hvo-demo
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: web
+          image: zot.registry.svc.cluster.local:5000/hvo-demo/web:initial
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]

@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: hvo-demo
+spec:
+  selector:
+    app: hvo-demo
+  ports:
+    - port: 80
+      targetPort: 8080
