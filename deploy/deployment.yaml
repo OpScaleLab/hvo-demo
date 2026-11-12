@@ -17,7 +17,7 @@ spec:
         app: hvo-demo
     spec:
       containers:
-      - image: zot.registry.svc.cluster.local:5000/hvo-demo/web@sha256:fe6dd487928c0242c0dca527e2e69d8f445037890f9ec0b70cc51246dc207eed
+      - image: zot.registry.svc.cluster.local:5000/hvo-demo/web@sha256:aa21f70993a038e2849a276ee0f55f388b91e16980e9a1d6871cf5e578b607d2
         name: web
         ports:
         - containerPort: 8080
