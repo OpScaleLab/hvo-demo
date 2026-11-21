@@ -11,3 +11,4 @@ needs:
   postgres:
     size: small
   redis: {}                  # REDIS_URL
+  bucket: {}                 # S3_* and AWS_*

@@ -4,7 +4,9 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -12,6 +14,9 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
 // version is set at build time (-ldflags "-X main.version=...").
@@ -64,13 +69,51 @@ func cache() string {
 	return fmt.Sprintf("%s answered %q", u.Host, strings.TrimSpace(string(buf[:n])))
 }
 
+// storage writes an object to the bucket from hvo.yaml needs.bucket and
+// reads it back.
+func storage() string {
+	endpoint, bucket := os.Getenv("S3_ENDPOINT"), os.Getenv("S3_BUCKET")
+	if endpoint == "" || bucket == "" {
+		return "no bucket"
+	}
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return "bad S3_ENDPOINT"
+	}
+	c, err := minio.New(u.Host, &minio.Options{
+		Creds:  credentials.NewStaticV4(os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"), ""),
+		Secure: u.Scheme == "https",
+		Region: os.Getenv("AWS_REGION"),
+	})
+	if err != nil {
+		return err.Error()
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	body := "written " + time.Now().UTC().Format(time.RFC3339)
+	if _, err := c.PutObject(ctx, bucket, "hello.txt", strings.NewReader(body), int64(len(body)), minio.PutObjectOptions{}); err != nil {
+		return "put: " + err.Error()
+	}
+	obj, err := c.GetObject(ctx, bucket, "hello.txt", minio.GetObjectOptions{})
+	if err != nil {
+		return "get: " + err.Error()
+	}
+	defer obj.Close()
+	got, err := io.ReadAll(obj)
+	if err != nil {
+		return "read: " + err.Error()
+	}
+	return fmt.Sprintf("%s/hello.txt read back %q", bucket, got)
+}
+
 func main() {
 	host, _ := os.Hostname()
 	http.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-		fmt.Fprintf(w, "hvo-demo %s on %s (run 9, narrowed operator RBAC)\n", version, host)
+		fmt.Fprintf(w, "hvo-demo %s on %s (run 10, with a bucket)\n", version, host)
 		fmt.Fprintf(w, "greeting: %s\n", os.Getenv("GREETING"))
 		fmt.Fprintf(w, "database: %s\n", database())
 		fmt.Fprintf(w, "cache: %s\n", cache())
+		fmt.Fprintf(w, "storage: %s\n", storage())
 	})
 	http.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
