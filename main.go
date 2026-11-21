@@ -1,22 +1,46 @@
-// hvo-demo is the smallest useful workload for exercising an HVO
-// ApplicationWorkflow end to end: Tekton builds this repo, HVO pins
-// deploy/deployment.yaml to the pushed digest, Argo CD rolls it out.
+// hvo-demo is the smallest useful workload for exercising HVO's platform
+// delivery: this repo holds only source code and hvo.yaml; HVO builds it
+// with Buildpacks and releases it to dev, then prod after one approval.
 package main
 
 import (
 	"fmt"
 	"log"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
+	"time"
 )
 
 // version is set at build time (-ldflags "-X main.version=...").
 var version = "dev"
 
+// database reports whether DATABASE_URL (from hvo.yaml needs.postgres) is
+// set and its server accepts connections.
+func database() string {
+	raw := os.Getenv("DATABASE_URL")
+	if raw == "" {
+		return "no DATABASE_URL"
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "bad DATABASE_URL"
+	}
+	conn, err := net.DialTimeout("tcp", u.Host, 2*time.Second)
+	if err != nil {
+		return fmt.Sprintf("%s unreachable: %v", u.Host, err)
+	}
+	conn.Close()
+	return fmt.Sprintf("%s%s reachable", u.Host, u.Path)
+}
+
 func main() {
 	host, _ := os.Hostname()
 	http.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-		fmt.Fprintf(w, "hvo-demo %s on %s (run 5, platform: no Dockerfile, no manifests)\n", version, host)
+		fmt.Fprintf(w, "hvo-demo %s on %s (run 6)\n", version, host)
+		fmt.Fprintf(w, "greeting: %s\n", os.Getenv("GREETING"))
+		fmt.Fprintf(w, "database: %s\n", database())
 	})
 	http.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
