@@ -16,7 +16,7 @@ var version = "dev"
 func main() {
 	host, _ := os.Hostname()
 	http.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-		fmt.Fprintf(w, "hvo-demo %s on %s (run 3, built on push)\n", version, host)
+		fmt.Fprintf(w, "hvo-demo %s on %s (run 4, platform: no Dockerfile, no manifests)\n", version, host)
 	})
 	http.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
