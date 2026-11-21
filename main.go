@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -17,6 +18,13 @@ import (
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
+	"go.opentelemetry.io/otel/sdk/trace"
 )
 
 // version is set at build time (-ldflags "-X main.version=...").
@@ -106,19 +114,60 @@ func storage() string {
 	return fmt.Sprintf("%s/hello.txt read back %q", bucket, got)
 }
 
+var tracer = otel.Tracer("hvo-demo")
+
+// tracing exports spans when the platform sets OTEL_EXPORTER_OTLP_ENDPOINT
+// (HVO does for every app); service name, environment and version come
+// from OTEL_SERVICE_NAME and OTEL_RESOURCE_ATTRIBUTES.
+func tracing(ctx context.Context) func() {
+	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") == "" {
+		return func() {}
+	}
+	exp, err := otlptracehttp.New(ctx)
+	if err != nil {
+		log.Printf("tracing off: %v", err)
+		return func() {}
+	}
+	res, _ := resource.New(ctx, resource.WithFromEnv(), resource.WithTelemetrySDK())
+	tp := trace.NewTracerProvider(trace.WithBatcher(exp), trace.WithResource(res))
+	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+	return func() { _ = tp.Shutdown(context.Background()) }
+}
+
+// traced runs check in a child span of the request.
+func traced(ctx context.Context, name string, check func() string) string {
+	_, span := tracer.Start(ctx, name)
+	defer span.End()
+	return check()
+}
+
 func main() {
+	defer tracing(context.Background())()
 	host, _ := os.Hostname()
-	http.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-		fmt.Fprintf(w, "hvo-demo %s on %s (run 11, Keyfold-sealed secret)\n", version, host)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+		ctx := req.Context()
+		fmt.Fprintf(w, "hvo-demo %s on %s (run 12, traced)\n", version, host)
 		fmt.Fprintf(w, "greeting: %s\n", os.Getenv("GREETING"))
 		fmt.Fprintf(w, "sealed: %s\n", os.Getenv("SEALED_GREETING"))
-		fmt.Fprintf(w, "database: %s\n", database())
-		fmt.Fprintf(w, "cache: %s\n", cache())
-		fmt.Fprintf(w, "storage: %s\n", storage())
+		fmt.Fprintf(w, "database: %s\n", traced(ctx, "check database", database))
+		fmt.Fprintf(w, "cache: %s\n", traced(ctx, "check cache", cache))
+		fmt.Fprintf(w, "storage: %s\n", traced(ctx, "check storage", storage))
 	})
-	http.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
+	// /fail records an error, for trying the platform's error views.
+	mux.HandleFunc("/fail", func(w http.ResponseWriter, req *http.Request) {
+		_, span := tracer.Start(req.Context(), "charge card")
+		err := errors.New("payment provider timed out")
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		span.End()
+		log.Printf("error: %v", err)
+		http.Error(w, err.Error(), http.StatusBadGateway)
+	})
 	log.Printf("hvo-demo %s listening on :8080", version)
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(":8080", otelhttp.NewHandler(mux, "http", otelhttp.WithFilter(func(r *http.Request) bool { return r.URL.Path != "/healthz" }))))
 }
