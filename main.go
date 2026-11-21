@@ -38,7 +38,7 @@ func database() string {
 func main() {
 	host, _ := os.Hostname()
 	http.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-		fmt.Fprintf(w, "hvo-demo %s on %s (run 6)\n", version, host)
+		fmt.Fprintf(w, "hvo-demo %s on %s (run 7, after legacy removal)\n", version, host)
 		fmt.Fprintf(w, "greeting: %s\n", os.Getenv("GREETING"))
 		fmt.Fprintf(w, "database: %s\n", database())
 	})
