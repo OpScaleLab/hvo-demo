@@ -10,3 +10,4 @@ secrets: [hvo-demo-config]   # GREETING
 needs:
   postgres:
     size: small
+  redis: {}                  # REDIS_URL
