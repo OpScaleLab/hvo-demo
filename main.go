@@ -109,8 +109,9 @@ func storage() string {
 func main() {
 	host, _ := os.Hostname()
 	http.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-		fmt.Fprintf(w, "hvo-demo %s on %s (run 10, with a bucket)\n", version, host)
+		fmt.Fprintf(w, "hvo-demo %s on %s (run 11, Keyfold-sealed secret)\n", version, host)
 		fmt.Fprintf(w, "greeting: %s\n", os.Getenv("GREETING"))
+		fmt.Fprintf(w, "sealed: %s\n", os.Getenv("SEALED_GREETING"))
 		fmt.Fprintf(w, "database: %s\n", database())
 		fmt.Fprintf(w, "cache: %s\n", cache())
 		fmt.Fprintf(w, "storage: %s\n", storage())

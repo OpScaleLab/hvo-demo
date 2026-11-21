@@ -6,7 +6,7 @@ health: /healthz
 size: small
 expose:
   host: hvo-demo.think-lab.opscale.ir
-secrets: [hvo-demo-config]   # GREETING
+secrets: [hvo-demo-config, hvo-demo-sealed]   # GREETING; SEALED_GREETING (Keyfold, .hvo/secrets/<env>/)
 needs:
   postgres:
     size: small
