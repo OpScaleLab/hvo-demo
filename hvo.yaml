@@ -1,0 +1,8 @@
+# What this app needs from the platform (HVO docs/hvo-yaml.md).
+name: hvo-demo
+type: web
+port: 8080
+health: /healthz
+size: small
+expose:
+  host: hvo-demo.think-lab.opscale.ir
