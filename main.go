@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"html/template"
 	"io"
 	"log"
 	"net"
@@ -116,6 +117,80 @@ func storage() string {
 
 var tracer = otel.Tracer("hvo-demo")
 
+// indexPage is deliberately small: HVO owns the browser telemetry code and
+// all scope injection; this app only passes the public config HVO injected
+// as environment variables. html/template escapes values in HTML and JS.
+var indexPage = template.Must(template.New("index").Parse(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>hvo-demo</title>
+{{if .RUMToken}}
+  <script>
+    window.HVO_RUM = { token: "{{.RUMToken}}", endpoint: "{{.RUMEndpoint}}" };
+  </script>
+  <script src="{{.RUMScript}}" defer></script>
+{{end}}
+</head>
+<body>
+<pre>
+hvo-demo {{.Version}} on {{.Host}} (run 12, traced)
+greeting: {{.Greeting}}
+sealed: {{.Sealed}}
+database: {{.Database}}
+cache: {{.Cache}}
+storage: {{.Storage}}
+</pre>
+</body>
+</html>
+`))
+
+type pageData struct {
+	Version, Host                    string
+	Greeting, Sealed                 string
+	Database, Cache, Storage         string
+	RUMToken, RUMEndpoint, RUMScript string
+}
+
+func index(w http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+	host, _ := os.Hostname()
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := indexPage.Execute(w, pageData{
+		Version:     version,
+		Host:        host,
+		Greeting:    os.Getenv("GREETING"),
+		Sealed:      os.Getenv("SEALED_GREETING"),
+		Database:    traced(ctx, "check database", database),
+		Cache:       traced(ctx, "check cache", cache),
+		Storage:     traced(ctx, "check storage", storage),
+		RUMToken:    os.Getenv("HVO_RUM_TOKEN"),
+		RUMEndpoint: os.Getenv("HVO_RUM_COLLECT_URL"),
+		RUMScript:   os.Getenv("HVO_RUM_SCRIPT_URL"),
+	}); err != nil {
+		log.Printf("render index: %v", err)
+	}
+}
+
+func newMux() *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", index)
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	// /fail records an error, for trying the platform's error views.
+	mux.HandleFunc("/fail", func(w http.ResponseWriter, req *http.Request) {
+		_, span := tracer.Start(req.Context(), "charge card")
+		err := errors.New("payment provider timed out")
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		span.End()
+		log.Printf("error: %v", err)
+		http.Error(w, err.Error(), http.StatusBadGateway)
+	})
+	return mux
+}
+
 // tracing exports spans when the platform sets OTEL_EXPORTER_OTLP_ENDPOINT
 // (HVO does for every app); service name, environment and version come
 // from OTEL_SERVICE_NAME and OTEL_RESOURCE_ATTRIBUTES.
@@ -144,30 +219,6 @@ func traced(ctx context.Context, name string, check func() string) string {
 
 func main() {
 	defer tracing(context.Background())()
-	host, _ := os.Hostname()
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
-		ctx := req.Context()
-		fmt.Fprintf(w, "hvo-demo %s on %s (run 12, traced)\n", version, host)
-		fmt.Fprintf(w, "greeting: %s\n", os.Getenv("GREETING"))
-		fmt.Fprintf(w, "sealed: %s\n", os.Getenv("SEALED_GREETING"))
-		fmt.Fprintf(w, "database: %s\n", traced(ctx, "check database", database))
-		fmt.Fprintf(w, "cache: %s\n", traced(ctx, "check cache", cache))
-		fmt.Fprintf(w, "storage: %s\n", traced(ctx, "check storage", storage))
-	})
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-	// /fail records an error, for trying the platform's error views.
-	mux.HandleFunc("/fail", func(w http.ResponseWriter, req *http.Request) {
-		_, span := tracer.Start(req.Context(), "charge card")
-		err := errors.New("payment provider timed out")
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		span.End()
-		log.Printf("error: %v", err)
-		http.Error(w, err.Error(), http.StatusBadGateway)
-	})
 	log.Printf("hvo-demo %s listening on :8080", version)
-	log.Fatal(http.ListenAndServe(":8080", otelhttp.NewHandler(mux, "http", otelhttp.WithFilter(func(r *http.Request) bool { return r.URL.Path != "/healthz" }))))
+	log.Fatal(http.ListenAndServe(":8080", otelhttp.NewHandler(newMux(), "http", otelhttp.WithFilter(func(r *http.Request) bool { return r.URL.Path != "/healthz" }))))
 }
