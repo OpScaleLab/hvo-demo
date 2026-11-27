@@ -11,9 +11,11 @@ func TestIndexLoadsHVOBrowserBootstrap(t *testing.T) {
 	token := "hvor_team-acme-dev_hvo-demo_abc123_secret"
 	endpoint := "https://api.nalyx.dev/api/tenant/v1/rum/collect"
 	script := "https://hvo.think-lab.opscale.ir/hvo-rum.js"
+	projectKey := "public-project-key"
 	t.Setenv("HVO_RUM_TOKEN", token)
 	t.Setenv("HVO_RUM_COLLECT_URL", endpoint)
 	t.Setenv("HVO_RUM_SCRIPT_URL", script)
+	t.Setenv("OPENREPLAY_PROJECT_KEY", projectKey)
 	t.Setenv("SEALED_GREETING", "</pre><script>alert(1)</script>")
 
 	rec := httptest.NewRecorder()
@@ -28,7 +30,7 @@ func TestIndexLoadsHVOBrowserBootstrap(t *testing.T) {
 	// html/template escapes forward slashes in JavaScript string contexts;
 	// the browser sees the original endpoint.
 	jsEndpoint := strings.ReplaceAll(endpoint, "/", `\/`)
-	for _, want := range []string{"window.HVO_RUM", token, jsEndpoint, `<script src="` + script + `" defer></script>`} {
+	for _, want := range []string{"window.HVO_RUM", token, jsEndpoint, projectKey, `ingestPoint: location.origin + "/ingest"`, `<script src="` + script + `" defer></script>`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q", want)
 		}
@@ -42,6 +44,7 @@ func TestIndexOmitsBootstrapWithoutConfig(t *testing.T) {
 	t.Setenv("HVO_RUM_TOKEN", "")
 	t.Setenv("HVO_RUM_COLLECT_URL", "")
 	t.Setenv("HVO_RUM_SCRIPT_URL", "")
+	t.Setenv("OPENREPLAY_PROJECT_KEY", "")
 
 	rec := httptest.NewRecorder()
 	newMux().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))

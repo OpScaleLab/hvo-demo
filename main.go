@@ -127,7 +127,7 @@ var indexPage = template.Must(template.New("index").Parse(`<!doctype html>
   <title>hvo-demo</title>
 {{if .RUMToken}}
   <script>
-    window.HVO_RUM = { token: "{{.RUMToken}}", endpoint: "{{.RUMEndpoint}}" };
+    window.HVO_RUM = { token: "{{.RUMToken}}", endpoint: "{{.RUMEndpoint}}"{{if .SessionsKey}}, sessions: { projectKey: "{{.SessionsKey}}", ingestPoint: location.origin + "/ingest" }{{end}} };
   </script>
   <script src="{{.RUMScript}}" defer></script>
 {{end}}
@@ -150,6 +150,7 @@ type pageData struct {
 	Greeting, Sealed                 string
 	Database, Cache, Storage         string
 	RUMToken, RUMEndpoint, RUMScript string
+	SessionsKey                      string
 }
 
 func index(w http.ResponseWriter, req *http.Request) {
@@ -167,6 +168,7 @@ func index(w http.ResponseWriter, req *http.Request) {
 		RUMToken:    os.Getenv("HVO_RUM_TOKEN"),
 		RUMEndpoint: os.Getenv("HVO_RUM_COLLECT_URL"),
 		RUMScript:   os.Getenv("HVO_RUM_SCRIPT_URL"),
+		SessionsKey: os.Getenv("OPENREPLAY_PROJECT_KEY"),
 	}); err != nil {
 		log.Printf("render index: %v", err)
 	}
