@@ -9,7 +9,8 @@ expose:
 secrets: [hvo-demo-config, hvo-demo-sealed]   # GREETING; SEALED_GREETING (Keyfold, .hvo/secrets/<env>/)
 observe:
   rum: true                # HVO-hosted browser bootstrap; app only loads it
-  language: go             # OpenTelemetry auto-instrumentation on app pods
+  # Go has no OpenTelemetry Operator auto-instrumentation; this app exports
+  # spans with the SDK using the OTEL_* environment HVO sets for every app.
   sessions: true           # HVO-provisioned OpenReplay project per environment
 needs:
   postgres:
