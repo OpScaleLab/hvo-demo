@@ -5,3 +5,4 @@
 Prepared with opencode on behalf of `@AliRezaTaleghani`.
 
 - 2026-11-24: grouped debt release 0.2.241 — public poll, release and Redis-password check.
+- 2026-11-28: rebuild after HVO 0.2.288 so the demo returns to its own hosts.
