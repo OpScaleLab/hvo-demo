@@ -1,6 +1,7 @@
 package main
 
 import (
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -72,5 +73,34 @@ func TestHealthAndFailRoutesStayAvailable(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "payment provider timed out") {
 		t.Fatalf("fail body = %q", rec.Body.String())
+	}
+}
+
+// HVO's Redis needs the password from REDIS_URL: the check authenticates
+// before PING instead of reporting NOAUTH.
+func TestCacheAuthenticates(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	got := make(chan string, 1)
+	go func() {
+		c, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer c.Close()
+		buf := make([]byte, 256)
+		n, _ := c.Read(buf)
+		got <- string(buf[:n])
+		_, _ = c.Write([]byte("+OK\r\n+PONG\r\n"))
+	}()
+	t.Setenv("REDIS_URL", "redis://:s3cr%40t@"+ln.Addr().String())
+	if out := cache(); !strings.HasSuffix(out, `answered "+PONG"`) {
+		t.Fatalf("cache() = %q", out)
+	}
+	if req := <-got; req != "*2\r\n$4\r\nAUTH\r\n$6\r\ns3cr@t\r\nPING\r\n" {
+		t.Errorf("sent %q", req)
 	}
 }

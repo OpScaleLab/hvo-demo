@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -67,15 +68,28 @@ func cache() string {
 	}
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
-	if _, err := conn.Write([]byte("PING\r\n")); err != nil {
+	// HVO's Redis requires the password in REDIS_URL: authenticate first
+	// (RESP array, so the password needs no escaping), then PING.
+	cmd := "PING\r\n"
+	if pw, ok := u.User.Password(); ok {
+		cmd = fmt.Sprintf("*2\r\n$4\r\nAUTH\r\n$%d\r\n%s\r\n", len(pw), pw) + cmd
+	}
+	if _, err := conn.Write([]byte(cmd)); err != nil {
 		return fmt.Sprintf("%s: %v", u.Host, err)
 	}
-	buf := make([]byte, 64)
-	n, err := conn.Read(buf)
-	if err != nil {
-		return fmt.Sprintf("%s: %v", u.Host, err)
+	r := bufio.NewReader(conn)
+	var reply string
+	for range strings.Count(cmd, "\r\n$4\r\nAUTH") + 1 { // AUTH reply, then PING's
+		line, err := r.ReadString('\n')
+		if err != nil {
+			return fmt.Sprintf("%s: %v", u.Host, err)
+		}
+		reply = strings.TrimSpace(line)
+		if strings.HasPrefix(reply, "-") {
+			break // an error (e.g. wrong password) is the answer to show
+		}
 	}
-	return fmt.Sprintf("%s answered %q", u.Host, strings.TrimSpace(string(buf[:n])))
+	return fmt.Sprintf("%s answered %q", u.Host, reply)
 }
 
 // storage writes an object to the bucket from hvo.yaml needs.bucket and
