@@ -1,24 +1,32 @@
 # hvo-demo
 
-Minimal workload for exercising an [HVO](https://github.com/OpScaleLab/hvo)
-ApplicationWorkflow end to end on think-lab:
+A small Go web app that shows what [HVO](https://github.com/OpScaleLab/hvo)
+gives every app: build from source (no Dockerfile), dev → prod with one
+approval, PR previews, Postgres, Redis and a bucket, traces, logs, browser
+vitals and session replay. Everything it needs from the platform is in
+[`hvo.yaml`](hvo.yaml).
 
-1. An `ApplicationWorkflow` starts the `hvo-demo-build` Tekton Pipeline,
-   which clones this repo and builds/pushes the image to the in-cluster zot
-   registry (`zot.registry.svc.cluster.local:5000/hvo-demo/web`).
-2. HVO rewrites `deploy/deployment.yaml` to the pushed digest and commits it
-   to `main`.
-3. HVO asks Argo CD (`argocd/hvo-demo`) to refresh, and Argo rolls it out.
+Live: <https://hvo-demo.nalyx.dev> (signed-in HVO users can browse it read
+only in the portal).
 
-The pipeline, Argo app and HVO `Application` live in think-lab-gitops
-(`addons/hvo-demo`, `gitops/apps/hvo-demo.yaml`).
+## Use it as a starter
 
-`deploy/deployment.yaml` is written by HVO; don't hand-edit the image.
+1. **Use this template → Create a new repository** (public, or private with
+   the HVO GitHub App installed).
+2. In the HVO portal: **Add app** → paste your repository URL → **Register**.
+3. Watch the steps on the app page. The first build takes a few minutes;
+   your copy goes live on `dev-hvo-demo-<company>.nalyx.dev`, then
+   `hvo-demo-<company>.nalyx.dev` after you approve prod.
 
-## Now: just source code and hvo.yaml
+No edits are needed: the host `hvo-demo.nalyx.dev` belongs to OpScale's
+copy, so HVO assigns yours, and the greeting secrets are `optionalSecrets`
+(the sealed ones here are OpScale's and are skipped in your copy). To use
+your own name, set `expose.host` to a free `<name>.nalyx.dev` or a host
+under your verified domain.
 
-There is no Dockerfile and no Kubernetes manifest here any more. HVO builds the
-code with Cloud Native Buildpacks and deploys it from `hvo.yaml` to dev on
-every push (https://dev-hvo-demo.think-lab.opscale.ir), then to prod after one
-approval (https://hvo-demo.think-lab.opscale.ir). Pull requests get a preview
-in dev.
+## Secrets
+
+`GREETING` comes from Secret `hvo-demo-config`, `SEALED_GREETING` from a
+[Keyfold](https://github.com/OpScaleLab/hvo) sealed secret committed under
+`.hvo/secrets/<env>/`. Both are optional; reseal for your own namespace
+(`team-<company>-<team>-<env>`) to show them in your copy.

@@ -5,8 +5,10 @@ port: 8080
 health: /healthz
 size: small
 expose:
-  host: hvo-demo.nalyx.dev
-secrets: [hvo-demo-config, hvo-demo-sealed]   # GREETING; SEALED_GREETING (Keyfold, .hvo/secrets/<env>/)
+  host: hvo-demo.nalyx.dev   # copies get <app>-<company>.nalyx.dev
+# Optional: copies of this starter run without them (HVO skips the sealed
+# one when it was made for another company's namespace).
+optionalSecrets: [hvo-demo-config, hvo-demo-sealed]   # GREETING; SEALED_GREETING (Keyfold, .hvo/secrets/<env>/)
 observe:
   rum: true                # HVO-hosted browser bootstrap; app only loads it
   # Go has no OpenTelemetry Operator auto-instrumentation; this app exports
